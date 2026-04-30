@@ -1,0 +1,32 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    working_dir: /app
+    ports:
+      - "3300:3300"
+    environment:
+      - PORT=3300
+    volumes:
+      - ./data:/app/data
+      - type: bind
+        source: ${DART_REPO_HOST_PATH:-D:/projects/dart-ai-trading-bot}
+        target: /workspace/dart-ai-trading-bot
+        read_only: true
+    command: npm run web
+
+  mcp:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    working_dir: /app
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./data:/app/data
+      - type: bind
+        source: ${DART_REPO_HOST_PATH:-D:/projects/dart-ai-trading-bot}
+        target: /workspace/dart-ai-trading-bot
+        read_only: true
+    command: npm run mcp

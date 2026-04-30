@@ -1,0 +1,36 @@
+{
+  "name": "sensitive-info-scanner-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "로컬 저장소 및 DB 민감정보 스캐너 MCP 서버",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/web/server.js",
+    "web": "node dist/web/server.js",
+    "mcp": "node dist/mcp/server.js",
+    "docker:web": "docker compose up --build web",
+    "docker:mcp": "docker compose run --rm mcp"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "better-sqlite3": "^9.4.3",
+    "express": "^4.19.2",
+    "glob": "^11.0.0",
+    "mysql2": "^3.9.3",
+    "pg": "^8.11.5",
+    "uuid": "^9.0.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.19.39",
+    "@types/pg": "^8.11.5",
+    "@types/uuid": "^9.0.8",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>민감정보 스캐너</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+           background: #f1f5f9; color: #1e293b; min-height: 100vh; }
+    header { background: #0f172a; color: #f8fafc; padding: 16px 28px;
+             display: flex; align-items: center; gap: 12px; }
+    header h1 { font-size: 18px; font-weight: 700; }
+    header span { font-size: 12px; color: #94a3b8; }
+    .tabs { display: flex; gap: 2px; padding: 16px 28px 0; }
+    .tab { padding: 9px 18px; border-radius: 8px 8px 0 0; cursor: pointer;
+           font-size: 13px; font-weight: 500; background: #e2e8f0; color: #64748b;
+           border: 1px solid #cbd5e1; border-bottom: none; }
+    .tab.active { background: #fff; color: #0f172a; border-color: #e2e8f0; }
+    .panel { display: none; padding: 24px 28px; }
+    .panel.active { display: block; }
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+            padding: 20px; margin-bottom: 16px; }
+    .card h2 { font-size: 15px; font-weight: 600; margin-bottom: 16px;
+               padding-bottom: 10px; border-bottom: 1px solid #f1f5f9; }
+    label { display: block; font-size: 12px; font-weight: 600; color: #475569;
+            margin-bottom: 4px; margin-top: 12px; }
+    label:first-child { margin-top: 0; }
+    input, select, textarea {
+      width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px;
+      font-size: 13px; background: #fff; color: #1e293b; }
+    input:focus, select:focus, textarea:focus {
+      outline: 2px solid #3b82f6; outline-offset: -1px; border-color: transparent; }
+    textarea { min-height: 72px; resize: vertical; font-family: monospace; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+           border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;
+           border: none; transition: opacity .15s; }
+    .btn:hover { opacity: .85; }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-danger { background: #dc2626; color: #fff; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+    .btn-outline { background: transparent; border: 1px solid #cbd5e1; color: #475569; }
+    .actions { display: flex; gap: 8px; margin-top: 16px; }
+    .badge { display: inline-block; padding: 2px 7px; border-radius: 4px;
+             font-size: 11px; font-weight: 700; }
+    .badge-critical { background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; }
+    .badge-high { background: #fff7ed; color: #ea580c; border: 1px solid #fdba74; }
+    .badge-medium { background: #fffbeb; color: #d97706; border: 1px solid #fcd34d; }
+    .badge-low { background: #f7fee7; color: #65a30d; border: 1px solid #bef264; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { background: #f8fafc; padding: 9px 12px; text-align: left;
+         font-weight: 600; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+    td { padding: 8px 12px; border-bottom: 1px solid #f8fafc; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    .empty { padding: 32px; text-align: center; color: #94a3b8; font-size: 14px; }
+    code { background: #f1f5f9; padding: 2px 5px; border-radius: 3px; font-size: 11px;
+           font-family: monospace; word-break: break-all; }
+    .progress-bar-wrap { background: #e2e8f0; border-radius: 999px; height: 8px; margin: 8px 0; }
+    .progress-bar { background: #2563eb; border-radius: 999px; height: 8px;
+                    transition: width .4s ease; }
+    .status-running { color: #2563eb; }
+    .status-completed { color: #16a34a; }
+    .status-failed { color: #dc2626; }
+    .row-grid { display: grid; gap: 16px; }
+    @media (min-width: 900px) { .row-grid { grid-template-columns: 1fr 1fr; } }
+    .section-title { font-size: 13px; font-weight: 600; color: #475569;
+                     margin-bottom: 8px; margin-top: 16px; }
+    .section-title:first-child { margin-top: 0; }
+    #toast { position: fixed; bottom: 24px; right: 24px; background: #1e293b;
+             color: #f8fafc; padding: 12px 18px; border-radius: 8px; font-size: 13px;
+             transform: translateY(80px); opacity: 0; transition: all .3s;
+             pointer-events: none; z-index: 100; }
+    #toast.show { transform: translateY(0); opacity: 1; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>🔍 민감정보 스캐너</h1>
+      <span>Sensitive Info Scanner MCP</span>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('configs')">설정</div>
+    <div class="tab" onclick="switchTab('scans')">스캔 실행</div>
+    <div class="tab" onclick="switchTab('reports')">리포트</div>
+  </div>
+
+  <!-- ── 설정 패널 ─────────────────────────────────────────── -->
+  <div id="tab-configs" class="panel active">
+    <div class="row-grid">
+      <div>
+        <div class="card">
+          <h2 id="config-form-title">새 스캔 설정 만들기</h2>
+          <input id="cfg-id" type="hidden">
+          <label>설정 이름 <span style="color:#ef4444">*</span></label>
+          <input id="cfg-name" placeholder="예: 운영 DB 점검">
+          <label>설명</label>
+          <input id="cfg-desc" placeholder="선택사항">
+
+          <div class="section-title">DB 대상 (JSON 배열)</div>
+          <textarea id="cfg-db" placeholder='[
+  {
+    "dialect": "postgresql",
+    "host": "localhost",
+    "port": 5432,
+    "database": "myapp",
+    "username": "readonly_user",
+    "password": "...",
+    "schemas": ["public"]
+  }
+]'></textarea>
+
+          <div class="section-title">코드 경로 (JSON 배열)</div>
+          <textarea id="cfg-code" placeholder='[
+  {
+    "path": "/app/src",
+    "excludePatterns": ["node_modules", "dist"]
+  }
+]'></textarea>
+          <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-sm btn-outline" onclick="fillCodePathSample()">샘플 채우기</button>
+            <button class="btn btn-sm btn-outline" onclick="fillDartCodePath()">DART 경로 채우기</button>
+          </div>
+
+          <div class="actions">
+            <button class="btn btn-primary" id="cfg-save-btn" onclick="saveConfig()">설정 저장</button>
+            <button class="btn btn-outline" id="cfg-cancel-btn" onclick="resetConfigForm()" style="display:none">편집 취소</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h2>저장된 설정</h2>
+          <div id="config-list"><div class="empty">저장된 설정이 없습니다.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 스캔 패널 ─────────────────────────────────────────── -->
+  <div id="tab-scans" class="panel">
+    <div class="card">
+      <h2>스캔 실행</h2>
+      <label>실행할 설정 선택 <span style="color:#ef4444">*</span></label>
+      <select id="scan-config-select">
+        <option value="">-- 설정 선택 --</option>
+      </select>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="startScan()">▶ 스캔 시작</button>
+      </div>
+    </div>
+
+    <div class="card" id="scan-progress-card" style="display:none">
+      <h2>진행 상태</h2>
+      <div id="scan-status-text" class="status-running">준비 중...</div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar" id="scan-progress-bar" style="width:0%"></div>
+      </div>
+      <div id="scan-current-target" style="font-size:12px;color:#64748b;margin-top:4px;"></div>
+      <div id="scan-findings-count" style="font-size:12px;color:#475569;margin-top:8px;font-weight:600;"></div>
+    </div>
+  </div>
+
+  <!-- ── 리포트 패널 ─────────────────────────────────────────── -->
+  <div id="tab-reports" class="panel">
+    <div class="card">
+      <h2>스캔 결과 목록</h2>
+      <div id="report-list"><div class="empty">스캔 결과가 없습니다.</div></div>
+    </div>
+
+    <div class="card" id="report-detail" style="display:none">
+      <h2 id="report-detail-title">상세 결과</h2>
+      <div id="report-detail-content"></div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script>
+    // ── 탭 전환 ───────────────────────────────────────────────
+    function switchTab(name) {
+      document.querySelectorAll('.tab').forEach((t, i) => {
+        const ids = ['configs','scans','reports'];
+        t.classList.toggle('active', ids[i] === name);
+        document.getElementById('tab-' + ids[i]).classList.toggle('active', ids[i] === name);
+      });
+      if (name === 'configs') loadConfigs();
+      if (name === 'scans') { loadConfigs(); loadScans(); }
+      if (name === 'reports') loadScans();
+    }
+
+    // ── 토스트 ───────────────────────────────────────────────
+    function toast(msg, isError = false) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.style.background = isError ? '#dc2626' : '#1e293b';
+      el.classList.add('show');
+      setTimeout(() => el.classList.remove('show'), 3000);
+    }
+
+    // ── 설정 API ─────────────────────────────────────────────
+    async function loadConfigs() {
+      const configs = await fetch('/api/configs').then(r => r.json());
+      renderConfigList(configs);
+      renderScanSelect(configs);
+    }
+
+    function renderConfigList(configs) {
+      const el = document.getElementById('config-list');
+      if (!configs.length) { el.innerHTML = '<div class="empty">저장된 설정이 없습니다.</div>'; return; }
+      el.innerHTML = '<table><thead><tr><th>이름</th><th>DB</th><th>코드경로</th><th>작업</th></tr></thead><tbody>' +
+        configs.map(c => `<tr>
+          <td><strong>${esc(c.name)}</strong><br><span style="font-size:11px;color:#94a3b8">${esc(c.id.slice(0,8))}</span></td>
+          <td>${c.dbTargets.length}개</td>
+          <td>${c.codeTargets.length}개</td>
+          <td>
+            <button class="btn btn-sm btn-outline" onclick="editConfig('${c.id}')">수정</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteConfig('${c.id}')">삭제</button>
+          </td>
+        </tr>`).join('') +
+        '</tbody></table>';
+    }
+
+    function renderScanSelect(configs) {
+      const sel = document.getElementById('scan-config-select');
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">-- 설정 선택 --</option>' +
+        configs.map(c => `<option value="${c.id}"${c.id===cur?' selected':''}>${esc(c.name)}</option>`).join('');
+    }
+
+    function fillCodePathSample() {
+      document.getElementById('cfg-code').value = JSON.stringify([
+        {
+          path: '/app/src',
+          excludePatterns: ['node_modules', 'dist', '.git'],
+          includeExtensions: ['ts', 'tsx', 'js', 'jsx', 'env', 'yml', 'yaml']
+        }
+      ], null, 2);
+    }
+
+    function fillDartCodePath() {
+      document.getElementById('cfg-code').value = JSON.stringify([
+        {
+          path: '/workspace/dart-ai-trading-bot/src',
+          excludePatterns: ['node_modules', 'dist', '.git', 'logs'],
+          includeExtensions: ['ts', 'tsx', 'js', 'jsx', 'env', 'yml', 'yaml']
+        },
+        {
+          path: '/workspace/dart-ai-trading-bot/prisma',
+          excludePatterns: ['node_modules', 'dist', '.git'],
+          includeExtensions: ['sql', 'prisma', 'ts']
+        }
+      ], null, 2);
+    }
+
+    function resetConfigForm() {
+      document.getElementById('cfg-id').value = '';
+      document.getElementById('cfg-name').value = '';
+      document.getElementById('cfg-desc').value = '';
+      document.getElementById('cfg-db').value = '';
+      document.getElementById('cfg-code').value = '';
+      document.getElementById('config-form-title').textContent = '새 스캔 설정 만들기';
+      document.getElementById('cfg-save-btn').textContent = '설정 저장';
+      document.getElementById('cfg-cancel-btn').style.display = 'none';
+    }
+
+    async function editConfig(id) {
+      const res = await fetch('/api/configs/' + id);
+      const data = await res.json();
+      if (!res.ok) { toast(data.error || '설정 로드 실패', true); return; }
+
+      document.getElementById('cfg-id').value = data.id;
+      document.getElementById('cfg-name').value = data.name ?? '';
+      document.getElementById('cfg-desc').value = data.description ?? '';
+      document.getElementById('cfg-db').value = JSON.stringify(data.dbTargets ?? [], null, 2);
+      document.getElementById('cfg-code').value = JSON.stringify(data.codeTargets ?? [], null, 2);
+      document.getElementById('config-form-title').textContent = '스캔 설정 수정';
+      document.getElementById('cfg-save-btn').textContent = '설정 업데이트';
+      document.getElementById('cfg-cancel-btn').style.display = '';
+      switchTab('configs');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function saveConfig() {
+      const name = document.getElementById('cfg-name').value.trim();
+      if (!name) { toast('설정 이름을 입력하세요.', true); return; }
+      const configId = document.getElementById('cfg-id').value.trim();
+
+      let dbTargets = [], codeTargets = [];
+      try {
+        const dbRaw = document.getElementById('cfg-db').value.trim();
+        if (dbRaw) dbTargets = JSON.parse(dbRaw);
+        const codeRaw = document.getElementById('cfg-code').value.trim();
+        if (codeRaw) codeTargets = JSON.parse(codeRaw);
+      } catch(e) { toast('JSON 형식 오류: ' + e.message, true); return; }
+
+      const isEdit = !!configId;
+      const res = await fetch(isEdit ? '/api/configs/' + configId : '/api/configs', {
+        method: isEdit ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          description: document.getElementById('cfg-desc').value.trim(),
+          dbTargets,
+          codeTargets,
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) { toast(data.error, true); return; }
+      toast(isEdit ? '설정이 수정되었습니다.' : '설정이 저장되었습니다.');
+      resetConfigForm();
+      loadConfigs();
+    }
+
+    async function deleteConfig(id) {
+      if (!confirm('설정을 삭제하시겠습니까?')) return;
+      await fetch('/api/configs/' + id, { method: 'DELETE' });
+      toast('삭제되었습니다.');
+      loadConfigs();
+    }
+
+    // ── 스캔 API ─────────────────────────────────────────────
+    let pollTimer = null;
+
+    async function startScan() {
+      const configId = document.getElementById('scan-config-select').value;
+      if (!configId) { toast('실행할 설정을 선택하세요.', true); return; }
+
+      const res = await fetch('/api/scans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ configId })
+      });
+      const data = await res.json();
+      if (!res.ok) { toast(data.error, true); return; }
+
+      toast('스캔이 시작되었습니다.');
+      document.getElementById('scan-progress-card').style.display = '';
+      pollProgress(data.scanId);
+    }
+
+    function pollProgress(scanId) {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(async () => {
+        const p = await fetch('/api/scans/' + scanId + '/progress').then(r => r.json());
+        updateProgressUI(p);
+        if (p.status === 'completed' || p.status === 'failed') {
+          clearInterval(pollTimer);
+          loadScans();
+          switchTab('reports');
+        }
+      }, 800);
+    }
+
+    function updateProgressUI(p) {
+      const pct = p.totalItems > 0 ? (p.processedItems / p.totalItems * 100) : 0;
+      document.getElementById('scan-progress-bar').style.width = pct + '%';
+      document.getElementById('scan-status-text').textContent =
+        { running: '▶ 스캔 진행 중...', completed: '✓ 완료', failed: '✗ 오류 발생', pending: '대기 중' }[p.status] ?? p.status;
+      document.getElementById('scan-status-text').className = 'status-' + p.status;
+      document.getElementById('scan-current-target').textContent = p.currentTarget ?? '';
+      document.getElementById('scan-findings-count').textContent =
+        `발견: ${p.findingsCount}건 | 경과: ${(p.elapsedMs / 1000).toFixed(1)}s`;
+    }
+
+    // ── 리포트 ────────────────────────────────────────────────
+    async function loadScans() {
+      const scans = await fetch('/api/scans').then(r => r.json());
+      renderReportList(scans);
+    }
+
+    function renderReportList(scans) {
+      const el = document.getElementById('report-list');
+      if (!scans.length) { el.innerHTML = '<div class="empty">스캔 결과가 없습니다.</div>'; return; }
+      el.innerHTML = '<table><thead><tr><th>설정</th><th>상태</th><th>발견</th><th>Critical</th><th>High</th><th>완료시각</th><th>작업</th></tr></thead><tbody>' +
+        scans.map(r => `<tr>
+          <td>${esc(r.configName)}</td>
+          <td class="status-${r.status}">${r.status}</td>
+          <td><strong>${r.summary.totalFindings}</strong></td>
+          <td class="badge-critical">${r.summary.bySeverity.critical}</td>
+          <td class="badge-high">${r.summary.bySeverity.high}</td>
+          <td style="font-size:11px;color:#64748b">${r.completedAt ? r.completedAt.replace('T',' ').slice(0,19) : '-'}</td>
+          <td style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-sm btn-outline" onclick="viewReport('${r.id}')">상세</button>
+            <a class="btn btn-sm btn-outline" href="/api/scans/${r.id}/report.html" target="_blank">HTML</a>
+            <a class="btn btn-sm btn-outline" href="/api/scans/${r.id}/report.json" download>JSON</a>
+          </td>
+        </tr>`).join('') +
+        '</tbody></table>';
+    }
+
+    async function viewReport(scanId) {
+      const report = await fetch('/api/scans/' + scanId).then(r => r.json());
+      document.getElementById('report-detail').style.display = '';
+      document.getElementById('report-detail-title').textContent =
+        `상세 결과 - ${report.configName} (${report.summary.totalFindings}건 발견)`;
+
+      const findings = report.findings;
+      const dbF = findings.filter(f => f.source === 'database');
+      const codeF = findings.filter(f => f.source === 'code');
+
+      let html = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+        ${['critical','high','medium','low'].map(s =>
+          `<div class="card" style="min-width:80px;padding:10px 14px">
+            <div style="font-size:11px;color:#94a3b8;text-transform:uppercase">${s}</div>
+            <div style="font-size:24px;font-weight:700">${report.summary.bySeverity[s]}</div>
+           </div>`
+        ).join('')}
+      </div>`;
+
+      if (dbF.length) {
+        html += `<h3 style="font-size:14px;margin:16px 0 8px">DB 발견 (${dbF.length}건)</h3>
+        <table><thead><tr><th>심각도</th><th>카테고리</th><th>룰</th><th>컬럼 경로</th><th>탐지방식</th><th>통계</th></tr></thead><tbody>` +
+          dbF.map(f => `<tr>
+            <td><span class="badge badge-${f.severity}">${f.severity.toUpperCase()}</span></td>
+            <td>${f.category}</td>
+            <td>${esc(f.ruleName)}</td>
+            <td><code>${esc(f.database)}.${esc(f.schema)}.${esc(f.table)}.<strong>${esc(f.column)}</strong></code></td>
+            <td>${f.matchedBy}</td>
+            <td>${f.stats ? `${(f.stats.fillRate*100).toFixed(1)}% / ${f.stats.totalRows}행` : '-'}</td>
+          </tr>`).join('') + '</tbody></table>';
+      }
+
+      if (codeF.length) {
+        html += `<h3 style="font-size:14px;margin:16px 0 8px">코드 발견 (${codeF.length}건)</h3>
+        <table><thead><tr><th>심각도</th><th>카테고리</th><th>룰</th><th>파일</th><th>위치</th><th>코드 (레드액션)</th></tr></thead><tbody>` +
+          codeF.map(f => `<tr>
+            <td><span class="badge badge-${f.severity}">${f.severity.toUpperCase()}</span></td>
+            <td>${f.category}</td>
+            <td>${esc(f.ruleName)}</td>
+            <td><code>${esc(f.filePath)}</code></td>
+            <td>${f.line}:${f.column}</td>
+            <td><code>${esc(f.snippet)}</code></td>
+          </tr>`).join('') + '</tbody></table>';
+      }
+
+      if (!findings.length) html += '<div class="empty">발견된 민감정보가 없습니다.</div>';
+      document.getElementById('report-detail-content').innerHTML = html;
+      document.getElementById('report-detail').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function esc(s) {
+      return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── 초기화 ───────────────────────────────────────────────
+    loadConfigs();
+    loadScans();
+  </script>
+</body>
+</html>

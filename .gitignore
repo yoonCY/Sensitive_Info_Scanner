@@ -1,0 +1,23 @@
+node_modules/
+dist/
+
+# 스캔 설정 및 결과 (로컬 전용)
+data/configs/
+data/reports/
+
+# 환경변수
+.env
+.env.*
+!.env.example
+
+# 빌드/캐시
+*.tsbuildinfo
+.cache/
+
+# 로그
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
