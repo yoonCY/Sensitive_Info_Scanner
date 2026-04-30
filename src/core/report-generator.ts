@@ -20,6 +20,33 @@ function badge(severity: Severity): string {
     padding:1px 6px;font-size:11px;font-weight:700;">${severity.toUpperCase()}</span>`;
 }
 
+function formatMatchedBy(matchedBy: DbFinding["matchedBy"]): string {
+  if (matchedBy === "column_name") return "컬럼명 패턴";
+  if (matchedBy === "data_sample") return "샘플값 패턴";
+  return "컬럼명 + 샘플값";
+}
+
+function formatStats(finding: DbFinding): string {
+  if (!finding.stats) return "-";
+  return `채움률 ${(finding.stats.fillRate * 100).toFixed(1)}%<br>총 ${finding.stats.totalRows.toLocaleString()}행`;
+}
+
+function formatAiDecision(ai: DbFinding["aiReview"] | CodeFinding["aiReview"]): string {
+  if (!ai) return "-";
+
+  if (ai.decision === "skipped") {
+    if (!ai.enabled) return "건너뜀 (비활성화)";
+    if (ai.reason.includes("상한")) return "건너뜀 (평가 상한 초과)";
+    return `건너뜀 (${escapeHtml(ai.reason)})`;
+  }
+
+  if (ai.decision === "error") {
+    return `오류 (원본 유지)`;
+  }
+
+  return `${ai.decision} (${(ai.score * 100).toFixed(0)}%)`;
+}
+
 function renderDbFinding(f: DbFinding): string {
   return `
     <tr>
@@ -28,8 +55,9 @@ function renderDbFinding(f: DbFinding): string {
       <td>${f.ruleName}</td>
       <td><code>${f.database}.${f.schema}.${f.table}.<strong>${f.column}</strong></code></td>
       <td>${f.columnType}</td>
-      <td>${f.matchedBy}</td>
-      <td>${f.stats ? `${(f.stats.fillRate * 100).toFixed(1)}% filled<br>${f.stats.totalRows.toLocaleString()} rows` : "-"}</td>
+      <td>${formatMatchedBy(f.matchedBy)}</td>
+      <td>${formatStats(f)}</td>
+      <td>${formatAiDecision(f.aiReview)}</td>
     </tr>`;
 }
 
@@ -41,7 +69,8 @@ function renderCodeFinding(f: CodeFinding): string {
       <td>${f.ruleName}</td>
       <td><code>${f.filePath}</code></td>
       <td>Line ${f.line}:${f.column}</td>
-      <td colspan="2"><code style="word-break:break-all;">${escapeHtml(f.snippet)}</code></td>
+      <td><code style="word-break:break-all;">${escapeHtml(f.snippet)}</code></td>
+      <td>${formatAiDecision(f.aiReview)}</td>
     </tr>`;
 }
 
@@ -142,6 +171,10 @@ export class ReportGenerator {
       <div class="card-label">스캔 파일</div>
       <div class="card-value">${summary.filesScanned}</div>
     </div>
+    <div class="card">
+      <div class="card-label">AI Strict Drop</div>
+      <div class="card-value">${summary.aiDroppedCount ?? 0}</div>
+    </div>
   </div>
 
   <section>
@@ -157,7 +190,7 @@ export class ReportGenerator {
         <tr>
           <th>심각도</th><th>카테고리</th><th>룰</th>
           <th>경로 (DB.스키마.테이블.컬럼)</th><th>타입</th>
-          <th>탐지방식</th><th>통계</th>
+          <th>탐지방식</th><th>통계</th><th>AI 판별</th>
         </tr>
       </thead>
       <tbody>${dbRows}</tbody>
@@ -171,7 +204,7 @@ export class ReportGenerator {
       <thead>
         <tr>
           <th>심각도</th><th>카테고리</th><th>룰</th>
-          <th>파일</th><th>위치</th><th colspan="2">코드 (레드액션)</th>
+          <th>파일</th><th>위치</th><th>코드 (레드액션)</th><th>AI 판별</th>
         </tr>
       </thead>
       <tbody>${codeRows}</tbody>

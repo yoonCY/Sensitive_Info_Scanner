@@ -192,6 +192,133 @@ export const BUILTIN_RULES: SensitivityRule[] = [
     description: "혈액형, BMI, 체중, 키 등",
     columnPattern: /\b(blood_?type|bmi|weight|height|키|체중|혈액형)\b/i,
   },
+
+  // ── OAuth / Auth 토큰 ───────────────────────────────────────────────────────
+  {
+    id: "oauth-access-token",
+    name: "OAuth 액세스 토큰",
+    category: "oauth",
+    severity: "critical",
+    description: "OAuth 플랫폼 액세스 토큰",
+    columnPattern: /\b(oauth_?token|access_?token|oauth_?access|bearer_?token)\b/i,
+    codePattern: /\b(oauth_?token|access_?token)\s*[:=]\s*["'][A-Za-z0-9_\-\.]{20,}["']/i,
+  },
+  {
+    id: "oauth-refresh-token",
+    name: "OAuth 리프레시 토큰",
+    category: "oauth",
+    severity: "critical",
+    description: "OAuth 리프레시 토큰",
+    columnPattern: /\b(refresh_?token|oauth_?refresh)\b/i,
+    codePattern: /\b(refresh_?token)\s*[:=]\s*["'][A-Za-z0-9_\-\.]{20,}["']/i,
+  },
+  {
+    id: "oauth-client-id-secret",
+    name: "OAuth 클라이언트 ID/시크릿",
+    category: "oauth",
+    severity: "critical",
+    description: "OAuth 클라이언트 ID, 시크릿키",
+    columnPattern: /\b(client_?id|client_?secret|oauth_?id|app_?secret)\b/i,
+  },
+
+  // ── Device ID ────────────────────────────────────────────────────────────────
+  {
+    id: "device-mac-address",
+    name: "MAC 주소",
+    category: "device",
+    severity: "high",
+    description: "기기 MAC 주소",
+    columnPattern: /\b(mac|mac_?address|hardware_?address|mac_?addr|device_?id|mac_?id)\b/i,
+    dataPattern: /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/,
+  },
+  {
+    id: "device-imei",
+    name: "IMEI 번호",
+    category: "device",
+    severity: "high",
+    description: "휴대폰 IMEI 번호",
+    columnPattern: /\b(imei|international_?mobile_?equipment|device_?imei|mobile_?id)\b/i,
+    dataPattern: /^\d{15}$/,
+  },
+  {
+    id: "device-udid",
+    name: "UDID / Device UUID",
+    category: "device",
+    severity: "high",
+    description: "iOS UDID, 기기 고유 식별자",
+    columnPattern: /\b(udid|unique_?device_?identifier|device_?uuid|uuid|ios_?id)\b/i,
+    dataPattern: /^[0-9a-f]{40}$|^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  },
+  {
+    id: "device-android-id",
+    name: "Android 기기 ID",
+    category: "device",
+    severity: "high",
+    description: "Android 기기 식별 번호",
+    columnPattern: /\b(android_?id|android_?device|device_?serial|serial_?number)\b/i,
+  },
+
+  // ── Biometric ────────────────────────────────────────────────────────────────
+  {
+    id: "biometric-fingerprint",
+    name: "지문 데이터",
+    category: "biometric",
+    severity: "critical",
+    description: "지문 생체 데이터",
+    columnPattern: /\b(fingerprint|finger_?print|biometric_?data|fingerprint_?data|fpr_?data)\b/i,
+  },
+  {
+    id: "biometric-iris",
+    name: "홍채 데이터",
+    category: "biometric",
+    severity: "critical",
+    description: "홍채 생체 정보",
+    columnPattern: /\b(iris|iris_?scan|iris_?data|eye_?scan|ocular_?data)\b/i,
+  },
+  {
+    id: "biometric-face",
+    name: "얼굴 인식 데이터",
+    category: "biometric",
+    severity: "critical",
+    description: "얼굴 생체 데이터, 안면 인식",
+    columnPattern: /\b(face_?data|facial_?data|face_?recognition|face_?print|face_?id|facial_?recognition)\b/i,
+  },
+  {
+    id: "biometric-voice",
+    name: "음성 바이오메트릭",
+    category: "biometric",
+    severity: "high",
+    description: "음성 인식, 성문인식 데이터",
+    columnPattern: /\b(voice|voice_?data|voice_?print|speaker_?id|voice_?recognition)\b/i,
+  },
+
+  // ── Certificate / Key ────────────────────────────────────────────────────────
+  {
+    id: "certificate-ssl-cert",
+    name: "SSL 인증서",
+    category: "certificate",
+    severity: "high",
+    description: "SSL/TLS 인증서",
+    columnPattern: /\b(ssl_?cert|certificate|cert|x509|tls_?cert)\b/i,
+    codePattern: /-----BEGIN\s+CERTIFICATE-----/,
+  },
+  {
+    id: "certificate-ca-key",
+    name: "CA 개인 키",
+    category: "certificate",
+    severity: "critical",
+    description: "CA 인증기관 개인키",
+    columnPattern: /\b(ca_?key|certificate_?authority|ca_?private|root_?key)\b/i,
+    codePattern: /-----BEGIN\s+(RSA|EC|DSA)\s+PRIVATE KEY-----.*-----END\s+(RSA|EC|DSA)\s+PRIVATE KEY-----/s,
+  },
+  {
+    id: "certificate-pfx-p12",
+    name: "PFX/P12 인증서 패키지",
+    category: "certificate",
+    severity: "critical",
+    description: "PKCS#12 형식의 인증서 번들",
+    columnPattern: /\b(pfx|p12|pkcs12|certificate_?bundle)\b/i,
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

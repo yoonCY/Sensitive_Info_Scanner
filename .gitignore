@@ -24,3 +24,7 @@ Thumbs.db
 
 # Local AI state
 .ai/
+
+# logs
+logs/report/
+logs/settings/

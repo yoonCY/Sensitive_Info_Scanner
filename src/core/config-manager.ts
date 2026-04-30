@@ -1,49 +1,39 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
 import { v4 as uuidv4 } from "uuid";
 import type { ScanConfig, DbConnectionConfig, CodeTargetConfig, RuleOverride } from "../types.js";
+import type { AuthContext } from "./auth-context.js";
+import { appDb } from "./app-db.js";
+import { writeAuditLog } from "../core/audit-logger.js";
 
-const DATA_DIR = join(process.cwd(), "data", "configs");
+const DEFAULT_TENANT_ID = (process.env.DEFAULT_TENANT_ID ?? "default").trim() || "default";
 
-function ensureDataDir(): void {
-  if (!existsSync(DATA_DIR)) {
-    mkdirSync(DATA_DIR, { recursive: true });
-  }
+function normalizeTenantId(tenantId?: string): string {
+  const value = tenantId?.trim();
+  return value || DEFAULT_TENANT_ID;
 }
 
-function configPath(id: string): string {
-  return join(DATA_DIR, `${id}.json`);
+function normalizeConfig(config: ScanConfig): ScanConfig {
+  return {
+    ...config,
+    tenantId: normalizeTenantId(config.tenantId),
+  };
 }
-
-function loadAll(): ScanConfig[] {
-  ensureDataDir();
-  if (!existsSync(join(DATA_DIR, "index.json"))) return [];
-  const raw = readFileSync(join(DATA_DIR, "index.json"), "utf-8");
-  return JSON.parse(raw) as ScanConfig[];
-}
-
-function saveAll(configs: ScanConfig[]): void {
-  ensureDataDir();
-  writeFileSync(
-    join(DATA_DIR, "index.json"),
-    JSON.stringify(configs, null, 2),
-    "utf-8"
-  );
-}
-
-// ─────────────────────────────────────────────
 
 export class ConfigManager {
-  listConfigs(): ScanConfig[] {
-    return loadAll();
+  listConfigs(tenantId?: string): ScanConfig[] {
+    const normalizedTenantId = normalizeTenantId(tenantId);
+    const configs = appDb.listConfigs(normalizedTenantId);
+    return configs.filter((config) => config.tenantId === normalizedTenantId);
   }
 
-  getConfig(id: string): ScanConfig | null {
-    const all = loadAll();
-    return all.find((c) => c.id === id) ?? null;
+  getConfig(id: string, tenantId?: string): ScanConfig | null {
+    const normalizedTenantId = normalizeTenantId(tenantId);
+    const config = appDb.getConfig(id, normalizedTenantId);
+    return config ? normalizeConfig(config) : null;
   }
 
   createConfig(input: {
+    tenantId?: string;
+    actor?: Pick<AuthContext, "tenantId" | "userId">;
     name: string;
     description?: string;
     dbTargets?: DbConnectionConfig[];
@@ -55,6 +45,7 @@ export class ConfigManager {
     const now = new Date().toISOString();
     const config: ScanConfig = {
       id: uuidv4(),
+      tenantId: normalizeTenantId(input.tenantId),
       name: input.name,
       description: input.description,
       dbTargets: input.dbTargets ?? [],
@@ -64,42 +55,57 @@ export class ConfigManager {
       updatedAt: now,
     };
 
-    const all = loadAll();
-    all.push(config);
-    saveAll(all);
+    appDb.saveConfig(config, input.actor?.userId);
+    writeAuditLog("settings", config.name, {
+      action: "create",
+      configId: config.id,
+      config,
+    }, { tenantId: config.tenantId ?? DEFAULT_TENANT_ID, userId: input.actor?.userId });
     return config;
   }
 
   updateConfig(
     id: string,
-    patch: Partial<Omit<ScanConfig, "id" | "createdAt">>
+    patch: Partial<Omit<ScanConfig, "id" | "createdAt">>,
+    tenantId?: string,
+    actor?: Pick<AuthContext, "tenantId" | "userId">
   ): ScanConfig {
-    const all = loadAll();
-    const idx = all.findIndex((c) => c.id === id);
-    if (idx === -1) throw new Error(`설정을 찾을 수 없습니다: ${id}`);
+    const normalizedTenantId = normalizeTenantId(tenantId);
+    const current = appDb.getConfig(id, normalizedTenantId);
+    if (!current) throw new Error(`설정을 찾을 수 없습니다: ${id}`);
 
     if (patch.dbTargets) {
       this.validateDbTargets(patch.dbTargets);
     }
 
     const updated: ScanConfig = {
-      ...all[idx],
+      ...current,
       ...patch,
+      tenantId: current.tenantId,
       id,
       updatedAt: new Date().toISOString(),
     };
-    all[idx] = updated;
-    saveAll(all);
+    appDb.saveConfig(updated, actor?.userId);
+    writeAuditLog("settings", updated.name, {
+      action: "update",
+      configId: updated.id,
+      patch,
+      updatedConfig: updated,
+    }, { tenantId: updated.tenantId ?? DEFAULT_TENANT_ID, userId: actor?.userId });
     return updated;
   }
 
-  deleteConfig(id: string): void {
-    const all = loadAll();
-    const filtered = all.filter((c) => c.id !== id);
-    if (filtered.length === all.length) {
+  deleteConfig(id: string, tenantId?: string, actor?: Pick<AuthContext, "tenantId" | "userId">): void {
+    const normalizedTenantId = normalizeTenantId(tenantId);
+    const deleted = appDb.getConfig(id, normalizedTenantId);
+    if (!deleted || !appDb.deleteConfig(id, normalizedTenantId)) {
       throw new Error(`설정을 찾을 수 없습니다: ${id}`);
     }
-    saveAll(filtered);
+    writeAuditLog("settings", deleted?.name ?? id, {
+      action: "delete",
+      configId: id,
+      deletedConfig: deleted ?? null,
+    }, { tenantId: normalizedTenantId, userId: actor?.userId });
   }
 
   private validateDbTargets(targets: DbConnectionConfig[]): void {

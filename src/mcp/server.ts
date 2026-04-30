@@ -21,12 +21,17 @@ const reportGen = new ReportGenerator();
 
 // ─── 도구: 설정 목록 ────────────────────────────────────────────────────────
 
-server.tool("list_configs", "저장된 스캔 설정 목록을 반환합니다.", {}, async () => {
-  const configs = configManager.listConfigs();
-  return {
-    content: [{ type: "text", text: JSON.stringify(configs, null, 2) }],
-  };
-});
+server.tool(
+  "list_configs",
+  "저장된 스캔 설정 목록을 반환합니다.",
+  { tenantId: z.string().optional().describe("테넌트 ID (미지정 시 default)") },
+  async ({ tenantId }: { tenantId?: string }) => {
+    const configs = configManager.listConfigs(tenantId);
+    return {
+      content: [{ type: "text", text: JSON.stringify(configs, null, 2) }],
+    };
+  }
+);
 
 // ─── 도구: 설정 생성 ─────────────────────────────────────────────────────────
 
@@ -34,6 +39,8 @@ server.tool(
   "create_config",
   "새 스캔 설정을 생성합니다. DB 대상에는 schemas 필드가 필수입니다.",
   {
+    tenantId: z.string().optional().describe("테넌트 ID (미지정 시 default)"),
+    userId: z.string().optional().describe("실행 사용자 ID"),
     name: z.string().describe("설정 이름"),
     description: z.string().optional().describe("설명"),
     dbTargets: z
@@ -62,10 +69,73 @@ server.tool(
       )
       .default([])
       .describe("코드 경로 목록"),
+    ruleOverride: z
+      .object({
+        enabledCategories: z
+          .array(z.enum(["pii", "financial", "credentials", "health", "oauth", "device", "biometric", "certificate", "custom"]))
+          .optional(),
+        columnNameSensitivity: z.enum(["strict", "normal"]).optional(),
+        dataSamplingEnabled: z.boolean().optional(),
+        sampleRowLimit: z.number().optional(),
+        statsEnabled: z.boolean().optional(),
+        aiReview: z
+          .object({
+            enabled: z.boolean().optional(),
+            mode: z.enum(["advisory", "strict"]).optional(),
+            provider: z.enum(["heuristic", "http"]).optional(),
+            model: z.string().optional(),
+            timeoutMs: z.number().optional(),
+            minScore: z.number().optional(),
+            maxItems: z.number().optional(),
+          })
+          .optional(),
+      })
+      .optional()
+      .describe("룰/AI 보조 판별 설정"),
   },
-  async (args) => {
+  async (args: {
+    tenantId?: string;
+    userId?: string;
+    name: string;
+    description?: string;
+    dbTargets: Array<{
+      dialect: "postgresql" | "mysql" | "sqlite";
+      host?: string;
+      port?: number;
+      database: string;
+      username?: string;
+      password?: string;
+      filePath?: string;
+      ssl?: boolean;
+      schemas?: string[];
+    }>;
+    codeTargets: Array<{
+      path: string;
+      excludePatterns?: string[];
+      includeExtensions?: string[];
+    }>;
+    ruleOverride?: {
+      enabledCategories?: Array<"pii" | "financial" | "credentials" | "health" | "oauth" | "device" | "biometric" | "certificate" | "custom">;
+      columnNameSensitivity?: "strict" | "normal";
+      dataSamplingEnabled?: boolean;
+      sampleRowLimit?: number;
+      statsEnabled?: boolean;
+      aiReview?: {
+        enabled?: boolean;
+        mode?: "advisory" | "strict";
+        provider?: "heuristic" | "http";
+        model?: string;
+        timeoutMs?: number;
+        minScore?: number;
+        maxItems?: number;
+      };
+    };
+  }) => {
     try {
-      const config = configManager.createConfig(args);
+      const config = configManager.createConfig({
+        ...args,
+        actor: args.userId ? { tenantId: args.tenantId ?? "default", userId: args.userId } : undefined,
+      });
       return {
         content: [{ type: "text", text: JSON.stringify(config, null, 2) }],
       };
@@ -87,16 +157,22 @@ server.tool(
   "지정한 설정으로 민감정보 스캔을 시작하고 scanId를 반환합니다.",
   {
     configId: z.string().describe("실행할 스캔 설정 ID"),
+    tenantId: z.string().optional().describe("테넌트 ID (미지정 시 default)"),
+    userId: z.string().optional().describe("실행 사용자 ID"),
   },
-  async ({ configId }) => {
-    const config = configManager.getConfig(configId);
+  async ({ configId, tenantId, userId }: { configId: string; tenantId?: string; userId?: string }) => {
+    const config = configManager.getConfig(configId, tenantId);
     if (!config) {
       return {
         content: [{ type: "text", text: `설정을 찾을 수 없습니다: ${configId}` }],
         isError: true,
       };
     }
-    const scanId = scannerEngine.startScan(config);
+    const scanId = scannerEngine.startScan(
+      config,
+      {},
+      userId ? { tenantId: tenantId ?? "default", userId } : undefined
+    );
     return {
       content: [
         { type: "text", text: JSON.stringify({ scanId, message: "스캔이 시작되었습니다." }) },
@@ -110,9 +186,12 @@ server.tool(
 server.tool(
   "get_scan_progress",
   "스캔 진행 상태를 반환합니다.",
-  { scanId: z.string().describe("스캔 ID") },
-  async ({ scanId }) => {
-    const progress = getScanProgress(scanId);
+  {
+    scanId: z.string().describe("스캔 ID"),
+    tenantId: z.string().optional().describe("테넌트 ID (미지정 시 default)"),
+  },
+  async ({ scanId, tenantId }: { scanId: string; tenantId?: string }) => {
+    const progress = getScanProgress(scanId, tenantId);
     if (!progress) {
       return {
         content: [{ type: "text", text: `스캔을 찾을 수 없습니다: ${scanId}` }],
@@ -130,13 +209,14 @@ server.tool(
   "스캔 결과 리포트를 반환합니다.",
   {
     scanId: z.string().describe("스캔 ID"),
+    tenantId: z.string().optional().describe("테넌트 ID (미지정 시 default)"),
     format: z
       .enum(["json", "summary"])
       .default("summary")
       .describe("json = 전체 JSON, summary = 요약만"),
   },
-  async ({ scanId, format }) => {
-    const report = getScanReport(scanId);
+  async ({ scanId, tenantId, format }: { scanId: string; tenantId?: string; format: "json" | "summary" }) => {
+    const report = getScanReport(scanId, tenantId);
     if (!report) {
       return {
         content: [{ type: "text", text: `리포트를 찾을 수 없습니다: ${scanId}` }],
@@ -157,18 +237,23 @@ server.tool(
 
 // ─── 도구: 스캔 목록 ─────────────────────────────────────────────────────────
 
-server.tool("list_scans", "스캔 결과 목록을 반환합니다.", {}, async () => {
-  const scans = listScanReports().map(({ id, configName, status, completedAt, summary }) => ({
-    id,
-    configName,
-    status,
-    completedAt,
-    totalFindings: summary.totalFindings,
-    critical: summary.bySeverity.critical,
-    high: summary.bySeverity.high,
-  }));
-  return { content: [{ type: "text", text: JSON.stringify(scans, null, 2) }] };
-});
+server.tool(
+  "list_scans",
+  "스캔 결과 목록을 반환합니다.",
+  { tenantId: z.string().optional().describe("테넌트 ID (미지정 시 default)") },
+  async ({ tenantId }: { tenantId?: string }) => {
+    const scans = listScanReports(tenantId).map(({ id, configName, status, completedAt, summary }) => ({
+      id,
+      configName,
+      status,
+      completedAt,
+      totalFindings: summary.totalFindings,
+      critical: summary.bySeverity.critical,
+      high: summary.bySeverity.high,
+    }));
+    return { content: [{ type: "text", text: JSON.stringify(scans, null, 2) }] };
+  }
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 
