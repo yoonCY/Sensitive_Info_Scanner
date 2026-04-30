@@ -10,6 +10,7 @@ services:
       - PORT=3300
     volumes:
       - ./data:/app/data
+      - ./logs:/app/logs
       - type: bind
         source: ${DART_REPO_HOST_PATH:-D:/projects/dart-ai-trading-bot}
         target: /workspace/dart-ai-trading-bot
@@ -25,6 +26,7 @@ services:
     tty: true
     volumes:
       - ./data:/app/data
+      - ./logs:/app/logs
       - type: bind
         source: ${DART_REPO_HOST_PATH:-D:/projects/dart-ai-trading-bot}
         target: /workspace/dart-ai-trading-bot

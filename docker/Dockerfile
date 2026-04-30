@@ -12,6 +12,7 @@ RUN npm install
 
 COPY tsconfig.json ./
 COPY src ./src
+COPY frontend ./frontend
 COPY architecture.md ./architecture.md
 COPY README.md ./README.md
 

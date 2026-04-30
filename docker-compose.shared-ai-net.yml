@@ -1,0 +1,14 @@
+services:
+  web:
+    networks:
+      - default
+      - shared_ai_net
+
+  mcp:
+    networks:
+      - default
+      - shared_ai_net
+
+networks:
+  shared_ai_net:
+    external: true

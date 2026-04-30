@@ -5,7 +5,10 @@
   "type": "module",
   "description": "로컬 저장소 및 DB 민감정보 스캐너 MCP 서버",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "setup": "node scripts/setup.mjs",
+    "build:web-ui": "esbuild frontend/app.tsx --bundle --platform=browser --format=esm --target=es2022 --outfile=src/web/public/app.js",
+    "typecheck:web-ui": "tsc --noEmit --jsx react-jsx --lib ES2022,DOM --module ESNext --moduleResolution bundler --strict frontend/app.tsx",
+    "build": "npm run build:web-ui && tsc -p tsconfig.json",
     "start": "node dist/web/server.js",
     "web": "node dist/web/server.js",
     "mcp": "node dist/mcp/server.js",
@@ -22,6 +25,8 @@
     "glob": "^11.0.0",
     "mysql2": "^3.9.3",
     "pg": "^8.11.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "uuid": "^9.0.1",
     "zod": "^3.23.8"
   },
@@ -30,7 +35,10 @@
     "@types/express": "^4.17.21",
     "@types/node": "^20.19.39",
     "@types/pg": "^8.11.5",
+    "@types/react": "^18.3.7",
+    "@types/react-dom": "^18.3.3",
     "@types/uuid": "^9.0.8",
+    "esbuild": "^0.24.0",
     "typescript": "^5.9.3"
   }
 }

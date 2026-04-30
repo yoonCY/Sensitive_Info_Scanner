@@ -2,11 +2,12 @@
 //  민감정보 스캐너 공통 타입 정의
 // ─────────────────────────────────────────────
 
-export type SensitivityCategory = "pii" | "financial" | "credentials" | "health" | "custom";
+export type SensitivityCategory = "pii" | "financial" | "credentials" | "health" | "oauth" | "device" | "biometric" | "certificate" | "custom";
 export type Severity = "critical" | "high" | "medium" | "low";
 export type DbDialect = "postgresql" | "mysql" | "sqlite";
 export type ScanSource = "code" | "database";
 export type ScanStatus = "pending" | "running" | "completed" | "failed";
+export type AiReviewDecision = "keep" | "drop" | "skipped" | "error";
 
 // ─── 설정 ──────────────────────────────────────
 
@@ -29,15 +30,17 @@ export interface CodeTargetConfig {
 }
 
 export interface RuleOverride {
-  enabledCategories: SensitivityCategory[];
+  enabledCategories?: SensitivityCategory[];
   columnNameSensitivity?: "strict" | "normal";
   dataSamplingEnabled?: boolean;
   sampleRowLimit?: number;
   statsEnabled?: boolean;
+  aiReview?: AiReviewOptions;
 }
 
 export interface ScanConfig {
   id: string;
+  tenantId?: string;
   name: string;
   description?: string;
   dbTargets: DbConnectionConfig[];
@@ -45,6 +48,11 @@ export interface ScanConfig {
   ruleOverride?: RuleOverride;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ScanExecutionOptions {
+  sources?: ScanSource[];
+  plugins?: string[];
 }
 
 // ─── 룰 엔진 ────────────────────────────────────
@@ -100,6 +108,7 @@ export interface DbFinding {
   stats?: ColumnStats;
   columnPatternMatched?: string;
   dataPatternMatched?: string;
+  aiReview?: AiReviewResult;
 }
 
 // ─── 코드 스캐너 ────────────────────────────────
@@ -115,6 +124,27 @@ export interface CodeFinding {
   column: number;
   snippet: string;
   matchedBy: "pattern";
+  aiReview?: AiReviewResult;
+}
+
+export interface AiReviewResult {
+  enabled: boolean;
+  provider: "none" | "heuristic" | "http";
+  model: string;
+  decision: AiReviewDecision;
+  score: number;
+  reason: string;
+  latencyMs: number;
+}
+
+export interface AiReviewOptions {
+  enabled?: boolean;
+  mode?: "advisory" | "strict";
+  provider?: "heuristic" | "http";
+  model?: string;
+  timeoutMs?: number;
+  minScore?: number;
+  maxItems?: number;
 }
 
 export type ScanFinding = DbFinding | CodeFinding;
@@ -126,6 +156,7 @@ export interface ScanSummary {
   bySeverity: Record<Severity, number>;
   byCategory: Record<SensitivityCategory, number>;
   bySource: Record<ScanSource, number>;
+  aiDroppedCount: number;
   tablesScanned: number;
   columnsScanned: number;
   filesScanned: number;
@@ -135,6 +166,7 @@ export interface ScanSummary {
 
 export interface ScanReport {
   id: string;
+  tenantId?: string;
   configId: string;
   configName: string;
   status: ScanStatus;
@@ -147,6 +179,7 @@ export interface ScanReport {
 
 export interface ScanProgress {
   scanId: string;
+  tenantId?: string;
   status: ScanStatus;
   currentTarget?: string;
   currentPhase?: string;
